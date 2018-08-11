@@ -1,0 +1,21 @@
+<html>
+<body>
+<pre>
+<h1>µVision3 Build Log</h1>
+<h2>Project:</h2>
+D:\lab\Anotia\2_brd_branch\2015_0107_discuss_New_PCB\USBok_new_brd1-19\USBok_new_brd1-15\USBok_new_brd1-15\ver_0109_debug\ver_0102_debug\USER\test.uv2
+Project File Date:  01/22/2015
+
+<h2>Output:</h2>
+Build target 'Target 1'
+assembling startup_stm32f10x_hd.s...
+--- Error: failed to execute '.\ARMCC\bin\ArmAsm'
+Target not created
+Build target 'Target 1'
+assembling startup_stm32f10x_hd.s...
+--- Error: failed to execute '.\ARMCC\bin\ArmAsm'
+Target not created
+Build target 'Target 1'
+assembling startup_stm32f10x_hd.s...
+--- Error: failed to execute '.\ARMCC\bin\ArmAsm'
+Target not created

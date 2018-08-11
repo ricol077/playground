@@ -1,0 +1,2 @@
+--create ..\OBJ\TmpControl.lib
+..\obj\temperature.o

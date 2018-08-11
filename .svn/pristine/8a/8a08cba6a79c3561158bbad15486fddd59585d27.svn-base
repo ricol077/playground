@@ -1,0 +1,12 @@
+..\obj\tpad.o: ..\HARDWARE\TPAD\tpad.c
+..\obj\tpad.o: ..\HARDWARE\TPAD\tpad.h
+..\obj\tpad.o: ..\SYSTEM\sys\sys.h
+..\obj\tpad.o: ..\SYSTEM\sys\stm32f10x_map.h
+..\obj\tpad.o: ..\SYSTEM\sys\stm32f10x_conf.h
+..\obj\tpad.o: ..\SYSTEM\sys\stm32f10x_type.h
+..\obj\tpad.o: ..\SYSTEM\sys\cortexm3_macro.h
+..\obj\tpad.o: ..\SYSTEM\sys\stm32f10x_nvic.h
+..\obj\tpad.o: ..\HARDWARE\TIMER\timer.h
+..\obj\tpad.o: ..\SYSTEM\delay\delay.h
+..\obj\tpad.o: ..\SYSTEM\usart\usart.h
+..\obj\tpad.o: C:\Keil\ARM\RV31\INC\stdio.h

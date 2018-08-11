@@ -1,0 +1,11 @@
+..\obj\usmart.o: ..\USMART\usmart.c
+..\obj\usmart.o: ..\USMART\usmart.h
+..\obj\usmart.o: ..\USMART\usmart_str.h
+..\obj\usmart.o: ..\SYSTEM\usart\usart.h
+..\obj\usmart.o: ..\SYSTEM\sys\stm32f10x_map.h
+..\obj\usmart.o: ..\SYSTEM\sys\stm32f10x_conf.h
+..\obj\usmart.o: ..\SYSTEM\sys\stm32f10x_type.h
+..\obj\usmart.o: ..\SYSTEM\sys\cortexm3_macro.h
+..\obj\usmart.o: ..\SYSTEM\sys\stm32f10x_nvic.h
+..\obj\usmart.o: C:\Keil\ARM\RV31\INC\stdio.h
+..\obj\usmart.o: ..\SYSTEM\sys\sys.h

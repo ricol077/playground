@@ -1,0 +1,11 @@
+..\obj\rtc.o: ..\HARDWARE\RTC\rtc.c
+..\obj\rtc.o: ..\SYSTEM\sys\sys.h
+..\obj\rtc.o: ..\SYSTEM\sys\stm32f10x_map.h
+..\obj\rtc.o: ..\SYSTEM\sys\stm32f10x_conf.h
+..\obj\rtc.o: ..\SYSTEM\sys\stm32f10x_type.h
+..\obj\rtc.o: ..\SYSTEM\sys\cortexm3_macro.h
+..\obj\rtc.o: ..\SYSTEM\sys\stm32f10x_nvic.h
+..\obj\rtc.o: ..\SYSTEM\delay\delay.h
+..\obj\rtc.o: ..\SYSTEM\usart\usart.h
+..\obj\rtc.o: C:\Keil\ARM\RV31\INC\stdio.h
+..\obj\rtc.o: ..\HARDWARE\RTC\rtc.h

@@ -1,0 +1,11 @@
+..\obj\oled.o: ..\HARDWARE\OLED\oled.c
+..\obj\oled.o: ..\HARDWARE\OLED\oled.h
+..\obj\oled.o: ..\SYSTEM\sys\sys.h
+..\obj\oled.o: ..\SYSTEM\sys\stm32f10x_map.h
+..\obj\oled.o: ..\SYSTEM\sys\stm32f10x_conf.h
+..\obj\oled.o: ..\SYSTEM\sys\stm32f10x_type.h
+..\obj\oled.o: ..\SYSTEM\sys\cortexm3_macro.h
+..\obj\oled.o: ..\SYSTEM\sys\stm32f10x_nvic.h
+..\obj\oled.o: C:\Keil\ARM\RV31\INC\stdlib.h
+..\obj\oled.o: ..\HARDWARE\OLED\oledfont.h
+..\obj\oled.o: ..\SYSTEM\delay\delay.h

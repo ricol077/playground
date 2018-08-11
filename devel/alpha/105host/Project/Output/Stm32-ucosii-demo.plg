@@ -1,0 +1,378 @@
+<html>
+<body>
+<pre>
+<h1>µVision Build Log</h1>
+<h2>Project:</h2>
+C:\Users\Administrator\Dropbox\Stm32-ucosII-demo\Project\Stm32-ucosii-demo.uvproj
+Project File Date:  10/29/2014
+
+<h2>Output:</h2>
+Build target 'STM32-uCOSII-DEMO'
+compiling misc.c...
+compiling stm32f10x_rcc.c...
+compiling stm32f10x_gpio.c...
+compiling stm32f10x_exti.c...
+compiling stm32f10x_tim.c...
+compiling stm32f10x_usart.c...
+compiling core_cm3.c...
+compiling system_stm32f10x.c...
+assembling startup_stm32f10x_cl.s...
+compiling stm32f10x_can.c...
+compiling App.c...
+..\App\App.c(33): warning:  #177-D: variable "Data_res" was declared but never referenced
+..\App\App.c:           u8 Data_res;
+..\App\App.c:              ^
+..\App\App.c(34): warning:  #177-D: variable "err" was declared but never referenced
+..\App\App.c:       INT8U err;
+..\App\App.c:             ^
+..\App\App.c: ..\App\App.c: 2 warnings, 0 errors
+compiling stm32f10x_it.c...
+..\App\stm32f10x_it.c(67): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:                          printf("received 1 \r\n");
+..\App\stm32f10x_it.c:                          ^
+..\App\stm32f10x_it.c(72): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:                          printf("received 2 \r\n");
+..\App\stm32f10x_it.c:                          ^
+..\App\stm32f10x_it.c(76): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:                          printf("received num is %d",(unsigned int)Res);
+..\App\stm32f10x_it.c:                          ^
+..\App\stm32f10x_it.c(123): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:       printf("received ~");
+..\App\stm32f10x_it.c:       ^
+..\App\stm32f10x_it.c(127): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:        printf("received ~");
+..\App\stm32f10x_it.c:        ^
+..\App\stm32f10x_it.c(148): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:       printf("received ~");
+..\App\stm32f10x_it.c:       ^
+..\App\stm32f10x_it.c(152): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:        printf("received ~");
+..\App\stm32f10x_it.c:        ^
+..\App\stm32f10x_it.c: ..\App\stm32f10x_it.c: 7 warnings, 0 errors
+compiling usart.c...
+compiling can.c...
+compiling Bsp.c...
+..\Bsp\Bsp.c(152): warning:  #177-D: variable "Period_Ori" was declared but never referenced
+..\Bsp\Bsp.c:           const uint16_t Period_Ori = 1;
+..\Bsp\Bsp.c:                          ^
+..\Bsp\Bsp.c: ..\Bsp\Bsp.c: 1 warning, 0 errors
+compiling os_core.c...
+compiling os_flag.c...
+compiling os_mbox.c...
+compiling os_mem.c...
+compiling os_mutex.c...
+compiling os_q.c...
+compiling os_sem.c...
+compiling os_task.c...
+compiling os_time.c...
+compiling os_tmr.c...
+assembling os_cpu_a.asm...
+compiling os_cpu_c.c...
+compiling os_dbg.c...
+linking...
+Program Size: Code=20338 RO-data=626 RW-data=104 ZI-data=7472  
+".\Output\Stm32-ucosii-demo.axf" - 0 Error(s), 10 Warning(s).
+Load "C:\\Users\\Administrator\\Dropbox\\Stm32-ucosII-demo\\Project\\Output\\Stm32-ucosii-demo.AXF" 
+Load "C:\\Users\\Administrator\\Dropbox\\Stm32-ucosII-demo\\Project\\Output\\Stm32-ucosii-demo.AXF" 
+Set JLink Project File to "C:\Users\Administrator\Dropbox\Stm32-ucosII-demo\Project\JLinkSettings.ini"
+ 
+JLink info:
+------------
+DLL: V4.15n, compiled Jun 18 2010 19:55:09
+Firmware: J-Link ARM V8 compiled Sep  2 2011 17:54:36
+Hardware: V8.00
+S/N : 805306163 
+Feature(s) : RDI,FlashDL,FlashBP,JFlash,GDBFull 
+ 
+* JLink Info: TotalIRLen = 9, IRPrint = 0x0011
+* JLink Info: Found Cortex-M3 r1p1, Little endian.
+* JLink Info: TPIU fitted.
+* JLink Info: ETM fitted.
+* JLink Info:   FPUnit: 6 code (BP) slots and 2 literal slots
+ROMTableAddr = 0xE00FF003
+ 
+Target info:
+------------
+Device: STM32F107VC
+VTarget = 3.300V
+State of Pins: 
+TCK: 1, TDI: 0, TDO: 1, TMS: 0, TRES: 1, TRST: 1
+* JLink Info: TotalIRLen = 9, IRPrint = 0x0011
+* JLink Info: Found Cortex-M3 r1p1, Little endian.
+* JLink Info: TPIU fitted.
+* JLink Info: ETM fitted.
+* JLink Info:   FPUnit: 6 code (BP) slots and 2 literal slots
+Hardware-Breakpoints: 6
+Software-Breakpoints: 2048
+Watchpoints:          4
+JTAG speed: 2000 kHz
+ 
+Erase Done.
+Programming Done.
+Verify OK.
+Build target 'STM32-uCOSII-DEMO'
+compiling misc.c...
+compiling stm32f10x_rcc.c...
+compiling stm32f10x_gpio.c...
+compiling stm32f10x_exti.c...
+compiling stm32f10x_tim.c...
+compiling stm32f10x_usart.c...
+compiling core_cm3.c...
+compiling system_stm32f10x.c...
+assembling startup_stm32f10x_cl.s...
+compiling stm32f10x_can.c...
+compiling App.c...
+..\App\App.c(33): warning:  #177-D: variable "Data_res" was declared but never referenced
+..\App\App.c:           u8 Data_res;
+..\App\App.c:              ^
+..\App\App.c(34): warning:  #177-D: variable "err" was declared but never referenced
+..\App\App.c:       INT8U err;
+..\App\App.c:             ^
+..\App\App.c: ..\App\App.c: 2 warnings, 0 errors
+compiling stm32f10x_it.c...
+..\App\stm32f10x_it.c(67): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:                          printf("received 1 \r\n");
+..\App\stm32f10x_it.c:                          ^
+..\App\stm32f10x_it.c(72): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:                          printf("received 2 \r\n");
+..\App\stm32f10x_it.c:                          ^
+..\App\stm32f10x_it.c(76): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:                          printf("received num is %d",(unsigned int)Res);
+..\App\stm32f10x_it.c:                          ^
+..\App\stm32f10x_it.c(123): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:       printf("received ~");
+..\App\stm32f10x_it.c:       ^
+..\App\stm32f10x_it.c(127): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:        printf("received ~");
+..\App\stm32f10x_it.c:        ^
+..\App\stm32f10x_it.c(148): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:       printf("received ~");
+..\App\stm32f10x_it.c:       ^
+..\App\stm32f10x_it.c(152): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:        printf("received ~");
+..\App\stm32f10x_it.c:        ^
+..\App\stm32f10x_it.c: ..\App\stm32f10x_it.c: 7 warnings, 0 errors
+compiling usart.c...
+compiling Bsp.c...
+..\Bsp\Bsp.c(155): warning:  #177-D: variable "Period_Ori" was declared but never referenced
+..\Bsp\Bsp.c:           const uint16_t Period_Ori = 1;
+..\Bsp\Bsp.c:                          ^
+..\Bsp\Bsp.c: ..\Bsp\Bsp.c: 1 warning, 0 errors
+compiling os_core.c...
+compiling os_flag.c...
+compiling os_mbox.c...
+compiling os_mem.c...
+compiling os_mutex.c...
+compiling os_q.c...
+compiling os_sem.c...
+compiling os_task.c...
+compiling os_time.c...
+compiling os_tmr.c...
+assembling os_cpu_a.asm...
+compiling os_cpu_c.c...
+compiling os_dbg.c...
+linking...
+Program Size: Code=20330 RO-data=626 RW-data=104 ZI-data=7472  
+".\Output\Stm32-ucosii-demo.axf" - 0 Error(s), 10 Warning(s).
+Load "C:\\Users\\Administrator\\Dropbox\\Stm32-ucosII-demo\\Project\\Output\\Stm32-ucosii-demo.AXF" 
+Set JLink Project File to "C:\Users\Administrator\Dropbox\Stm32-ucosII-demo\Project\JLinkSettings.ini"
+ 
+JLink info:
+------------
+DLL: V4.15n, compiled Jun 18 2010 19:55:09
+Firmware: J-Link ARM V8 compiled Sep  2 2011 17:54:36
+Hardware: V8.00
+S/N : 805306163 
+Feature(s) : RDI,FlashDL,FlashBP,JFlash,GDBFull 
+ 
+* JLink Info: TotalIRLen = 9, IRPrint = 0x0011
+* JLink Info: Found Cortex-M3 r1p1, Little endian.
+* JLink Info: TPIU fitted.
+* JLink Info: ETM fitted.
+* JLink Info:   FPUnit: 6 code (BP) slots and 2 literal slots
+ROMTableAddr = 0xE00FF003
+ 
+Target info:
+------------
+Device: STM32F107VC
+VTarget = 3.300V
+State of Pins: 
+TCK: 1, TDI: 0, TDO: 1, TMS: 0, TRES: 1, TRST: 1
+* JLink Info: TotalIRLen = 9, IRPrint = 0x0011
+* JLink Info: Found Cortex-M3 r1p1, Little endian.
+* JLink Info: TPIU fitted.
+* JLink Info: ETM fitted.
+* JLink Info:   FPUnit: 6 code (BP) slots and 2 literal slots
+Hardware-Breakpoints: 6
+Software-Breakpoints: 2048
+Watchpoints:          4
+JTAG speed: 2000 kHz
+ 
+Erase Done.
+Programming Done.
+Verify OK.
+Build target 'STM32-uCOSII-DEMO'
+compiling misc.c...
+compiling stm32f10x_rcc.c...
+compiling stm32f10x_gpio.c...
+compiling stm32f10x_exti.c...
+compiling stm32f10x_tim.c...
+compiling stm32f10x_usart.c...
+compiling core_cm3.c...
+compiling system_stm32f10x.c...
+assembling startup_stm32f10x_cl.s...
+compiling stm32f10x_can.c...
+compiling App.c...
+..\App\App.c(33): warning:  #177-D: variable "Data_res" was declared but never referenced
+..\App\App.c:           u8 Data_res;
+..\App\App.c:              ^
+..\App\App.c(34): warning:  #177-D: variable "err" was declared but never referenced
+..\App\App.c:       INT8U err;
+..\App\App.c:             ^
+..\App\App.c: ..\App\App.c: 2 warnings, 0 errors
+compiling stm32f10x_it.c...
+..\App\stm32f10x_it.c(67): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:                          printf("received 1 \r\n");
+..\App\stm32f10x_it.c:                          ^
+..\App\stm32f10x_it.c(72): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:                          printf("received 2 \r\n");
+..\App\stm32f10x_it.c:                          ^
+..\App\stm32f10x_it.c(76): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:                          printf("received num is %d",(unsigned int)Res);
+..\App\stm32f10x_it.c:                          ^
+..\App\stm32f10x_it.c(123): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:       printf("received ~");
+..\App\stm32f10x_it.c:       ^
+..\App\stm32f10x_it.c(127): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:        printf("received ~");
+..\App\stm32f10x_it.c:        ^
+..\App\stm32f10x_it.c(148): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:       printf("received ~");
+..\App\stm32f10x_it.c:       ^
+..\App\stm32f10x_it.c(152): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:        printf("received ~");
+..\App\stm32f10x_it.c:        ^
+..\App\stm32f10x_it.c: ..\App\stm32f10x_it.c: 7 warnings, 0 errors
+compiling usart.c...
+compiling Bsp.c...
+..\Bsp\Bsp.c(155): warning:  #177-D: variable "Period_Ori" was declared but never referenced
+..\Bsp\Bsp.c:           const uint16_t Period_Ori = 1;
+..\Bsp\Bsp.c:                          ^
+..\Bsp\Bsp.c: ..\Bsp\Bsp.c: 1 warning, 0 errors
+compiling os_core.c...
+compiling os_flag.c...
+compiling os_mbox.c...
+compiling os_mem.c...
+compiling os_mutex.c...
+compiling os_q.c...
+compiling os_sem.c...
+compiling os_task.c...
+compiling os_time.c...
+compiling os_tmr.c...
+assembling os_cpu_a.asm...
+compiling os_cpu_c.c...
+compiling os_dbg.c...
+linking...
+Program Size: Code=20322 RO-data=626 RW-data=104 ZI-data=7472  
+".\Output\Stm32-ucosii-demo.axf" - 0 Error(s), 10 Warning(s).
+Build target 'STM32-uCOSII-DEMO'
+compiling misc.c...
+compiling stm32f10x_rcc.c...
+compiling stm32f10x_gpio.c...
+compiling stm32f10x_exti.c...
+compiling stm32f10x_tim.c...
+compiling stm32f10x_usart.c...
+compiling core_cm3.c...
+compiling system_stm32f10x.c...
+assembling startup_stm32f10x_cl.s...
+compiling stm32f10x_can.c...
+compiling App.c...
+..\App\App.c(33): warning:  #177-D: variable "Data_res" was declared but never referenced
+..\App\App.c:           u8 Data_res;
+..\App\App.c:              ^
+..\App\App.c(34): warning:  #177-D: variable "err" was declared but never referenced
+..\App\App.c:       INT8U err;
+..\App\App.c:             ^
+..\App\App.c: ..\App\App.c: 2 warnings, 0 errors
+compiling stm32f10x_it.c...
+..\App\stm32f10x_it.c(67): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:                          printf("received 1 \r\n");
+..\App\stm32f10x_it.c:                          ^
+..\App\stm32f10x_it.c(72): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:                          printf("received 2 \r\n");
+..\App\stm32f10x_it.c:                          ^
+..\App\stm32f10x_it.c(76): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:                          printf("received num is %d",(unsigned int)Res);
+..\App\stm32f10x_it.c:                          ^
+..\App\stm32f10x_it.c(123): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:       printf("received ~");
+..\App\stm32f10x_it.c:       ^
+..\App\stm32f10x_it.c(127): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:        printf("received ~");
+..\App\stm32f10x_it.c:        ^
+..\App\stm32f10x_it.c(148): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:       printf("received ~");
+..\App\stm32f10x_it.c:       ^
+..\App\stm32f10x_it.c(152): warning:  #223-D: function "printf" declared implicitly
+..\App\stm32f10x_it.c:        printf("received ~");
+..\App\stm32f10x_it.c:        ^
+..\App\stm32f10x_it.c: ..\App\stm32f10x_it.c: 7 warnings, 0 errors
+compiling usart.c...
+compiling Bsp.c...
+..\Bsp\Bsp.c(155): warning:  #177-D: variable "Period_Ori" was declared but never referenced
+..\Bsp\Bsp.c:           const uint16_t Period_Ori = 1;
+..\Bsp\Bsp.c:                          ^
+..\Bsp\Bsp.c: ..\Bsp\Bsp.c: 1 warning, 0 errors
+compiling os_core.c...
+compiling os_flag.c...
+compiling os_mbox.c...
+compiling os_mem.c...
+compiling os_mutex.c...
+compiling os_q.c...
+compiling os_sem.c...
+compiling os_task.c...
+compiling os_time.c...
+compiling os_tmr.c...
+assembling os_cpu_a.asm...
+compiling os_cpu_c.c...
+compiling os_dbg.c...
+linking...
+Program Size: Code=20290 RO-data=626 RW-data=104 ZI-data=7472  
+".\Output\Stm32-ucosii-demo.axf" - 0 Error(s), 10 Warning(s).
+Load "C:\\Users\\Administrator\\Dropbox\\Stm32-ucosII-demo\\Project\\Output\\Stm32-ucosii-demo.AXF" 
+Set JLink Project File to "C:\Users\Administrator\Dropbox\Stm32-ucosII-demo\Project\JLinkSettings.ini"
+ 
+JLink info:
+------------
+DLL: V4.15n, compiled Jun 18 2010 19:55:09
+Firmware: J-Link ARM V8 compiled Sep  2 2011 17:54:36
+Hardware: V8.00
+S/N : 805306163 
+Feature(s) : RDI,FlashDL,FlashBP,JFlash,GDBFull 
+ 
+* JLink Info: TotalIRLen = 9, IRPrint = 0x0011
+* JLink Info: Found Cortex-M3 r1p1, Little endian.
+* JLink Info: TPIU fitted.
+* JLink Info: ETM fitted.
+* JLink Info:   FPUnit: 6 code (BP) slots and 2 literal slots
+ROMTableAddr = 0xE00FF003
+ 
+Target info:
+------------
+Device: STM32F107VC
+VTarget = 3.300V
+State of Pins: 
+TCK: 1, TDI: 0, TDO: 1, TMS: 0, TRES: 1, TRST: 1
+* JLink Info: TotalIRLen = 9, IRPrint = 0x0011
+* JLink Info: Found Cortex-M3 r1p1, Little endian.
+* JLink Info: TPIU fitted.
+* JLink Info: ETM fitted.
+* JLink Info:   FPUnit: 6 code (BP) slots and 2 literal slots
+Hardware-Breakpoints: 6
+Software-Breakpoints: 2048
+Watchpoints:          4
+JTAG speed: 2000 kHz
+ 
+Erase Done.
+Programming Done.
+Verify OK.

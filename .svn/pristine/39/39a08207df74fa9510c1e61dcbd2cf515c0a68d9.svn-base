@@ -1,0 +1,14 @@
+..\obj\can.o: ..\HARDWARE\CAN\can.c
+..\obj\can.o: ..\HARDWARE\CAN\can.h
+..\obj\can.o: ..\SYSTEM\sys\sys.h
+..\obj\can.o: ..\SYSTEM\sys\stm32f10x_map.h
+..\obj\can.o: ..\SYSTEM\sys\stm32f10x_conf.h
+..\obj\can.o: ..\SYSTEM\sys\stm32f10x_type.h
+..\obj\can.o: ..\SYSTEM\sys\cortexm3_macro.h
+..\obj\can.o: ..\SYSTEM\sys\stm32f10x_nvic.h
+..\obj\can.o: ..\USER\user_def.h
+..\obj\can.o: ..\USER\build_cfg.h
+..\obj\can.o: ..\HARDWARE\LED\led.h
+..\obj\can.o: ..\SYSTEM\delay\delay.h
+..\obj\can.o: ..\SYSTEM\usart\usart.h
+..\obj\can.o: C:\Keil\ARM\RV31\INC\stdio.h

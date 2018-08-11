@@ -1,0 +1,1819 @@
+#include <includes.h>
+OS_EVENT* Right_time;
+void *RightQueueTbl[20];
+static  OS_STK  startup_task_stk[STARTUP_TASK_STK_SIZE];   //开辟任务堆栈
+static  OS_STK  led1_task_stk[LED1_TASK_STK_SIZE ];    //开辟任务堆栈
+static  OS_STK  CAN1_task_stk[CAN1_TASK_STK_SIZE ];    //开辟CAN任务堆栈
+static  OS_STK  USB_task_stk[USB_TASK_STK_SIZE ];    //开辟CAN任务堆栈
+
+
+static  OS_STK  CMD_task_stk[CMD_TASK_STK_SIZE ];
+static void systick_init(void); //函数声明
+ 
+u8 cmd_buf[64];  // command received both USB / BT
+u8 usb_rcv_buf[64];
+
+u8 Buf_CAN1_DAT[CAN_MAX_LEN]={0};
+OS_EVENT * msg_can_rcv_length;			//按键邮箱事件块	 
+CanRxMsg RxMessage;
+ 
+OS_EVENT * Sem_CAN1_AVL;	
+OS_EVENT * M_Temper_reply_len;	
+OS_EVENT * M_can1_wait_length;	
+OS_EVENT * M_can1_cmd_length;	
+OS_EVENT * M_USB_rsv;
+
+u8 can1_cmd_buf[64]={0};  //save command data for CAN1
+
+static void systick_init(void) 
+{ 
+    RCC_ClocksTypeDef  rcc_clocks; 
+    RCC_GetClocksFreq(&rcc_clocks);   //调用标准库函数，获取系统时钟。
+    SysTick_Config(rcc_clocks.HCLK_Frequency / OS_TICKS_PER_SEC); //初始化并使能SysTick
+									          //OS_TICKS_PER_SEC是在os_cfg.h中定义的
+}
+
+static void led1_task(void *p_arg)
+{   
+    p_arg=p_arg;      //防止编译器产生警告
+	while(1)
+	{	 
+		 /*LED1以2s频率闪烁*/
+		 led_on(LED1);
+     	 OSTimeDlyHMSM(0,0,1,0);  //1s延时，释放CPU控制权 
+		 led_off(LED1);
+		 OSTimeDlyHMSM(0,0,1,0); 	//1s延时，释放CPU控制权
+	}
+}
+#define    SET_CAN_SJW   CAN_SJW_1tq
+#define    SET_CAN_BS1   CAN_BS1_4tq	// 8
+#define    SET_CAN_BS2   CAN_BS2_4tq	// 7
+#define    SET_CAN_PRES  8				// 波特率分频器 9-250K 18-125K 
+
+
+CanTxMsg TxMsg1={0xAB,0,CAN_ID_STD,CAN_RTR_DATA,8,{0xAB,0,0,0,0,0,0,0}};
+CanTxMsg TxMsg2={0xAB,0,CAN_ID_STD,CAN_RTR_DATA,8,{0xAB,0,0,0,0,0,0,0}};
+void CAN1_Config(uint8_t sjw,uint8_t bs1,uint8_t bs2,uint16_t pres)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+    CAN_InitTypeDef        CAN_InitStructure;
+    CAN_FilterInitTypeDef  CAN_FilterInitStructure;
+	NVIC_InitTypeDef NVIC_InitStructure;
+
+    /* 打开GPIO时钟、AFIO时钟，CAN时钟 */
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB | RCC_APB2Periph_AFIO, ENABLE);
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_CAN1, ENABLE);
+
+
+	/* CAN1 RX PB8 */
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_8;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(GPIOB, &GPIO_InitStructure);
+	/* CAN1 TX PB9 */
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(GPIOB, &GPIO_InitStructure);
+
+	GPIO_PinRemapConfig(GPIO_Remap1_CAN1,ENABLE);  // CAN1 remap
+
+    /* CAN1 Enabling interrupt */									  
+    NVIC_InitStructure.NVIC_IRQChannel=CAN1_RX0_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&NVIC_InitStructure);									
+							  	
+    /* CAN  BaudRate = RCC_APB1PeriphClock/(CAN_SJW+CAN_BS1+CAN_BS2)/CAN_Prescaler */
+	CAN_DeInit(CAN1);
+    CAN_StructInit(&CAN_InitStructure);   
+
+    CAN_InitStructure.CAN_TTCM=DISABLE;
+    CAN_InitStructure.CAN_ABOM=DISABLE;
+    CAN_InitStructure.CAN_AWUM=DISABLE;
+    CAN_InitStructure.CAN_NART=DISABLE;
+    CAN_InitStructure.CAN_RFLM=DISABLE;
+    CAN_InitStructure.CAN_TXFP=DISABLE;
+    CAN_InitStructure.CAN_Mode=CAN_Mode_Normal;   
+	//CAN_InitStructure.CAN_Mode=CAN_Mode_LoopBack;
+    CAN_InitStructure.CAN_SJW=sjw;
+    CAN_InitStructure.CAN_BS1=bs1;  
+    CAN_InitStructure.CAN_BS2=bs2;	
+    CAN_InitStructure.CAN_Prescaler=pres;
+    
+
+    CAN_Init(CAN1,&CAN_InitStructure);	// CAN1											
+
+    CAN_FilterInitStructure.CAN_FilterNumber=0;	 
+    CAN_FilterInitStructure.CAN_FilterMode=CAN_FilterMode_IdMask;	 // 标识符屏蔽位模式
+    CAN_FilterInitStructure.CAN_FilterScale=CAN_FilterScale_32bit;   // 32位过滤器
+    CAN_FilterInitStructure.CAN_FilterIdHigh=0x0000;			// 过滤器标识符
+    CAN_FilterInitStructure.CAN_FilterIdLow=0x0000;				
+    CAN_FilterInitStructure.CAN_FilterMaskIdHigh=0x0000;		// 过滤器屏蔽标识符
+    CAN_FilterInitStructure.CAN_FilterMaskIdLow=0x0000;
+    CAN_FilterInitStructure.CAN_FilterFIFOAssignment=CAN_FIFO0;	 // FIFO0指向过滤器
+    CAN_FilterInitStructure.CAN_FilterActivation=ENABLE;
+    CAN_FilterInit(&CAN_FilterInitStructure);
+
+    //CAN_ITConfig(CAN1,(CAN_IT_FMP0|CAN_IT_TME),ENABLE);  // CAN1
+		CAN_ITConfig(CAN1,(CAN_IT_FMP0),ENABLE);
+}
+
+void CAN_SendData(CAN_TypeDef* CANx,CanTxMsg* CanData)
+{
+    uint8_t retrys=0;
+    uint8_t mailbox=0;
+
+    do
+	{
+	    mailbox=CAN_Transmit(CANx,CanData);
+		retrys++;
+	}
+	while((mailbox==CAN_TxStatus_NoMailBox)&&(retrys<0xFE));
+	retrys=0;
+}
+u8 can_rcv=0;
+
+u8 Temper_send_packet[64]={0};
+u8 Temper_CMD_packet [64]={0};
+u8 Temper_reply_packet[64]={0};
+
+#define LENGTH_CAN1_TEMPER	4  // temerature byte length expected to read back
+#define MAX_TRY_ERR					10  // if comm tried > 10 times, always fail on CAN, will report CAN bus failure
+
+static void CAN_POST_CMD_NACK(u8 can, CanTxMsg TxMessage)
+{
+
+}	
+
+static void CAN1_task(void *p_arg)
+{   
+		CanTxMsg TxMessage;
+		CanRxMsg Can1_buf;
+		u8 Flag_CAN1_READ, Flag_CAN1_replied;
+    INT8U err, error_cnt;
+		u8 Can1_rcv_len,i,j,k,index_rcv_CAN, index_send_CAN, Temper_packet_len,Temper_cmd_length,u8temp,u8temp1;
+		u8 command, type;
+    p_arg=p_arg;      //防止编译器产生警告
+
+	  CAN1_Config(SET_CAN_SJW,SET_CAN_BS1,SET_CAN_BS2,SET_CAN_PRES);  
+		index_rcv_CAN=index_send_CAN=Temper_packet_len=error_cnt=0;	   			  		  				
+	
+		while(1)
+		{				
+				Temper_cmd_length =*(u8 *)OSMboxPend(M_can1_cmd_length,10,&err);  // get command length
+			
+				if((Temper_cmd_length) && (err==OS_ERR_NONE))		// command for termperature thread is received
+				{
+						command =	can1_cmd_buf[CMD_BYTE_NUM];
+						type		= can1_cmd_buf[TYP_BYTE_NUM];
+					
+						TxMessage.StdId = 0x100; 	//  1 = to function 0x1  
+																			//	 0xYZ ispacket control. Y=total packet, Z= current #
+						//TxMessage.ExtId = 0x11; //	 0xYZ ispacket control. Y=total packet, Z= current #
+ 						TxMessage.RTR = CAN_RTR_DATA;
+						TxMessage.IDE = CAN_ID_STD;
+						TxMessage.DLC = 1; 
+						Can1_rcv_len=0;				// reset reply length
+					
+						switch(command)
+						{
+							case CMD_TEMP_SET:		//// control temperature
+									
+									switch(type)
+									{
+										case TEMP_READ_SENSOR:		// read temperature 
+												
+												Flag_CAN1_READ=1; 			// this command will be followed read process on CAN1
+												index_send_CAN=0; 			// reset send index	
+												Temper_packet_len = 8;  // replay packet: ACK, cmd,length, type, data[0..3]						
+												for (i=1;i<Temper_cmd_length;i++)
+												{
+													TxMessage.Data[i-1]=Temper_CMD_packet[i-1]=can1_cmd_buf[i];  //send valid data on CAN only,remove header
+													
+												}
+												TxMessage.StdId = 0x111;  //	 0xUVZ is U is F$  V=total packet, Z= current #
+												TxMessage.DLC = Temper_cmd_length-1; 
+												CAN_SendData(CAN1, &TxMessage);
+												
+												index_rcv_CAN=0;
+												do
+												{
+														Can1_rcv_len=*(u8 *)OSMboxPend(msg_can_rcv_length,30,&err);	
+																										// wait reply from Temper Func
+														if((Can1_rcv_len) && (err==OS_ERR_NONE))				// reply received 
+														{
+																error_cnt=0;
+																for(i=0; i<Can1_rcv_len; i++, index_rcv_CAN++)
+																	Temper_reply_packet[index_rcv_CAN] = RxMessage.Data[i];
+															
+															  TxMessage.StdId = 0x100 | (RxMessage.StdId & 0xFF ); //	 ACK to current packet id
+																TxMessage.Data[0]= 0;  // reply ACK
+																TxMessage.DLC = 1; 
+																CAN_SendData(CAN1, &TxMessage);
+																Temper_packet_len=Can1_rcv_len;
+																break;
+															  
+														}
+														else										// no replay
+														{
+																error_cnt++;
+																if(error_cnt > MAX_TRY_ERR)
+																{
+																	break; 							// 
+																}
+														}
+												}while(index_rcv_CAN< Temper_packet_len);
+												
+												if(error_cnt)
+												{
+														error_cnt=0;
+														Temper_reply_packet[0]=ERR_CAN1;
+														Temper_reply_packet[1]=command;
+														Temper_reply_packet[2]=1;
+														Temper_reply_packet[3]=type;		
+														Temper_packet_len=4;
+												}
+												OSMboxPost(M_Temper_reply_len, (void *) &Temper_packet_len);
+																					
+											break;
+							
+
+												
+										case TEMP_SET_ON:		// set temperature 	
+
+													Temper_reply_packet[0]=NO_ERR;
+													Temper_reply_packet[1]=command;
+													Temper_reply_packet[2]=1;
+													Temper_reply_packet[3]=type;		
+													Temper_packet_len=4;		
+													Flag_CAN1_replied=error_cnt=0;
+										
+													switch (can1_cmd_buf[TYP_BYTE_NUM+1])  // sensor valid
+													{
+															case SENSOR_2:
+														
+																//Temper_cmd_length=11;	// sensor 2 including temper , time
+																for (i=1;i<9;i++)
+																{
+																	TxMessage.Data[i-1]=Temper_CMD_packet[i-1]=can1_cmd_buf[i];  //cmd, len, type, sensor, float temper, uint16 time
+																}	
+																TxMessage.StdId = 0x121;  //	 0xUVZ is U is F$  V=total packet, Z= current #
+																TxMessage.DLC = 8; 
+																do
+																{
+																		CAN_SendData(CAN1, &TxMessage);															
+																		Can1_rcv_len=* (u8 *)OSMboxPend(msg_can_rcv_length,10,&err);	
+																		if((Can1_rcv_len)&&(err==OS_ERR_NONE))
+																		{
+																			if((RxMessage.StdId==0x121) &&  (RxMessage.Data[0]== NO_ERR))  //status code
+																			{
+																					error_cnt=0;
+																					for (i=0;i<2;i++)
+																						TxMessage.Data[i]=Temper_CMD_packet[i+8]=can1_cmd_buf[i+9];  //cmd, len, type, sensor, float temper, uint16 time
+																					TxMessage.DLC = 2;
+																					TxMessage.StdId = 0x122;  //	 0xUVZ is U is F$  V=total packet, Z= current #																							
+
+																					do
+																					{
+																						CAN_SendData(CAN1, &TxMessage);
+																						Can1_rcv_len=* (u8 *)OSMboxPend(msg_can_rcv_length,10,&err);	
+																						if((Can1_rcv_len)&&(err==OS_ERR_NONE))
+																						{
+																								if((RxMessage.StdId==0x122) && (RxMessage.Data[0]== NO_ERR))
+																								{
+																									Flag_CAN1_replied=1;
+																									for(i=0; i<Can1_rcv_len; i++, index_rcv_CAN++)
+																											Temper_reply_packet[i] = RxMessage.Data[i];
+																									error_cnt=0;
+																									break;
+																								}
+																								error_cnt++;
+																						}
+																						else error_cnt++;
+																					} while(error_cnt<MAX_TRY_ERR);
+																			
+																			}
+																			else error_cnt++;
+																		}
+																		else error_cnt++;
+																	}while((error_cnt<MAX_TRY_ERR) && (Flag_CAN1_replied ==0));
+																
+																	if(error_cnt)
+																	{
+																			Temper_reply_packet[0]=ERR_CAN1;
+																			Temper_reply_packet[1]=command;
+																			Temper_reply_packet[2]=1;
+																			Temper_reply_packet[3]=type;		
+																			Temper_packet_len=4;	
+																	}
+																break;
+																
+															case SENSOR_1:		
+																	Temper_cmd_length=8;
+																	// sensor 1 including temper only
+																	for (i=1;i<9;i++)
+																	{
+																		TxMessage.Data[i-1]=Temper_CMD_packet[i-1]=can1_cmd_buf[i];  //cmd, len, type, sensor, float temper, uint16 time
+																		
+																	}	
+																	TxMessage.StdId = 0x111;  //	 0xUVZ is U is F$  V=total packet, Z= current #
+																	TxMessage.DLC = 8;
+																	
+																	do
+																	{
+																		CAN_SendData(CAN1, &TxMessage);															
+																		Can1_rcv_len=* (u8 *)OSMboxPend(msg_can_rcv_length,10,&err);	
+																		if((Can1_rcv_len)&&(err==OS_ERR_NONE))
+																		{
+																			if((RxMessage.StdId==0x111) &&  (RxMessage.Data[0]== NO_ERR))
+																			{
+																					Flag_CAN1_replied=1;
+																					for(i=0; i<Can1_rcv_len; i++, index_rcv_CAN++)
+																							Temper_reply_packet[i] = RxMessage.Data[i];
+																					error_cnt=0;
+																					break;
+																			}
+																			error_cnt++;
+																		}
+																		else error_cnt++;
+																	}while((error_cnt<MAX_TRY_ERR) && (Flag_CAN1_replied ==0));					
+																break;
+														
+															default:
+																	Temper_reply_packet[0]=BAD_DATA;
+																	Temper_reply_packet[1]=command;
+																	Temper_reply_packet[2]=1;
+																	Temper_reply_packet[3]=type;		
+																	Temper_packet_len=4;	
+																break;
+													}
+													if(error_cnt) 
+													{
+														Temper_reply_packet[0]=ERR_CAN1;
+														Temper_reply_packet[1]=command;
+														Temper_reply_packet[2]=1;
+														Temper_reply_packet[3]=type;		
+														Temper_packet_len=4;															
+													}
+													OSMboxPost(M_Temper_reply_len, (void *) &Temper_packet_len);
+											break;
+									
+										case TEMP_SET_OFF:
+													Temper_reply_packet[0]=NO_ERR;
+													Temper_reply_packet[1]=command;
+													Temper_reply_packet[2]=1;
+													Temper_reply_packet[3]=type;		
+													Temper_packet_len=4;		
+													Flag_CAN1_replied=error_cnt=0;
+													for (i=1;i<Temper_cmd_length;i++)
+														TxMessage.Data[i-1]=Temper_CMD_packet[i-1]=can1_cmd_buf[i];  //cmd, len, type, sensor, float temper, uint16 time
+													TxMessage.StdId = 0x111;  //	 0xUVZ is U is F$  V=total packet, Z= current #
+													TxMessage.DLC = Temper_cmd_length-1;
+													do
+														{
+															CAN_SendData(CAN1, &TxMessage);															
+															Can1_rcv_len=* (u8 *)OSMboxPend(msg_can_rcv_length,10,&err);	
+															if((Can1_rcv_len)&&(err==OS_ERR_NONE))
+															{
+																if((RxMessage.StdId==0x111) &&  (RxMessage.Data[0]== NO_ERR))
+																{
+																		Flag_CAN1_replied=1;
+																		for(i=0; i<Can1_rcv_len; i++, index_rcv_CAN++)
+																				Temper_reply_packet[i] = RxMessage.Data[i];
+																		error_cnt=0;
+																		break;
+																}
+																error_cnt++;
+															}
+															else error_cnt++;
+														}while((error_cnt<MAX_TRY_ERR) && (Flag_CAN1_replied ==0));
+
+													if(error_cnt) 
+													{
+														Temper_reply_packet[0]=ERR_CAN1;
+														Temper_reply_packet[1]=command;
+														Temper_reply_packet[2]=1;
+														Temper_reply_packet[3]=type;		
+														Temper_packet_len=4;															
+													}
+													OSMboxPost(M_Temper_reply_len, (void *) &Temper_packet_len);														
+											break;
+													
+										case TYP_FAN_CTRL:
+										case TYP_FAN_READ:
+										case TYP_FAN_GAP_READ:
+																	Temper_cmd_length=4;
+																	// sensor 1 including temper only
+																	for (i=1;i<4;i++)
+																	{
+																		TxMessage.Data[i-1]=Temper_CMD_packet[i-1]=can1_cmd_buf[i];  //cmd, len, type, sensor, float temper, uint16 time
+																		
+																	}	
+																	TxMessage.StdId = 0x111;  //	 0xUVZ is U is F$  V=total packet, Z= current #
+																	TxMessage.DLC = 4;
+																	
+																	do
+																	{
+																		CAN_SendData(CAN1, &TxMessage);															
+																		Can1_rcv_len=* (u8 *)OSMboxPend(msg_can_rcv_length,10,&err);	
+																		if((Can1_rcv_len)&&(err==OS_ERR_NONE))
+																		{
+																			if((RxMessage.StdId==0x111) &&  (RxMessage.Data[0]== NO_ERR))
+																			{
+																					Flag_CAN1_replied=1;
+																					for(i=0; i<Can1_rcv_len; i++, index_rcv_CAN++)
+																							Temper_reply_packet[i] = RxMessage.Data[i];
+																					error_cnt=0;
+																					break;
+																			}
+																			error_cnt++;
+																		}
+																		else error_cnt++;
+																	}while((error_cnt<MAX_TRY_ERR) && (Flag_CAN1_replied ==0));	
+																	
+																	if(error_cnt) 
+																	{
+																		Temper_reply_packet[0]=ERR_CAN1;
+																		Temper_reply_packet[1]=command;
+																		Temper_reply_packet[2]=1;
+																		Temper_reply_packet[3]=type;		
+																		Temper_packet_len=4;															
+																	}
+																	OSMboxPost(M_Temper_reply_len, (void *) &Temper_packet_len);
+																	
+											break;
+																	
+										case TYP_FAN_GAP_SET:
+											
+																	for (i=1;i<Temper_cmd_length;i++)
+																	{
+																		TxMessage.Data[i-1]=Temper_CMD_packet[i-1]=can1_cmd_buf[i];  //cmd, len, type, sensor, float temper, uint16 time
+																		
+																	}	
+																	TxMessage.StdId = 0x111;  //	 0xUVZ is U is F$  V=total packet, Z= current #
+																	TxMessage.DLC = 8;
+																	
+																	do
+																	{
+																		CAN_SendData(CAN1, &TxMessage);															
+																		Can1_rcv_len=* (u8 *)OSMboxPend(msg_can_rcv_length,10,&err);	
+																		if((Can1_rcv_len)&&(err==OS_ERR_NONE))
+																		{
+																			if((RxMessage.StdId==0x111) &&  (RxMessage.Data[0]== NO_ERR))
+																			{
+																					Flag_CAN1_replied=1;
+																					for(i=0; i<Can1_rcv_len; i++, index_rcv_CAN++)
+																							Temper_reply_packet[i] = RxMessage.Data[i];
+																					error_cnt=0;
+																					break;
+																			}
+																			error_cnt++;
+																		}
+																		else error_cnt++;
+																	}while((error_cnt<MAX_TRY_ERR) && (Flag_CAN1_replied ==0));	
+																	
+																	if(error_cnt) 
+																	{
+																		Temper_reply_packet[0]=ERR_CAN1;
+																		Temper_reply_packet[1]=command;
+																		Temper_reply_packet[2]=1;
+																		Temper_reply_packet[3]=type;		
+																		Temper_packet_len=4;															
+																	}
+																	OSMboxPost(M_Temper_reply_len, (void *) &Temper_packet_len);
+												break;
+																	
+										default:
+											
+										
+											break;
+									}// end switch(type)
+									break;
+									
+					case CMD_CYCLE_CTRL:  //0x13
+								switch(type)
+								{
+										case TYP_CYCLE_LOAD:
+										case TYP_PE_LOAD:
+										case TYP_OVERSHOT_TIM:
+										case TYP_OVERSHOT_TEM:
+											
+											Temper_reply_packet[0]=NO_ERR;
+											Temper_reply_packet[1]=command;
+											Temper_reply_packet[2]=1;
+											Temper_reply_packet[3]=type;		
+											Temper_packet_len=4;	
+										
+											Flag_CAN1_replied=error_cnt=0;
+										  u8temp=Temper_cmd_length-3;
+											u8temp1= u8temp/8;
+											u8temp1= (u8temp%8)? u8temp1+1: u8temp1;
+										 
+										  for(j=0;j<u8temp1;j++)
+											{
+												for (i=0;i<8;i++)
+													TxMessage.Data[i]=Temper_CMD_packet[i+j*8]=can1_cmd_buf[i+1+j*8];  //cmd, len, type, sensor, float temper, uint16 time
+												TxMessage.StdId = (0x100 | ((u8temp1 & 0xF)<<4) | (j & 0xf));  //	 0xUVZ is U is F$  V=total packet, Z= current #
+												TxMessage.DLC = 8;
+												
+												do
+													{
+														CAN_SendData(CAN1, &TxMessage);															
+														Can1_rcv_len=* (u8 *)OSMboxPend(msg_can_rcv_length,10,&err);	
+														if((Can1_rcv_len)&&(err==OS_ERR_NONE))
+														{
+															if((RxMessage.StdId==TxMessage.StdId) &&  (RxMessage.Data[0]== NO_ERR))
+															{
+																	if(j==(u8temp1-1))
+																	{
+																			Flag_CAN1_replied=1;
+																			for(i=0; i<Can1_rcv_len; i++, index_rcv_CAN++)
+																					Temper_reply_packet[i] = RxMessage.Data[i];
+																	}
+																	error_cnt=0;
+																	break;
+															}
+															error_cnt++;
+														}
+														else error_cnt++;
+													}while((error_cnt<MAX_TRY_ERR) && (Flag_CAN1_replied ==0));
+											
+													if(error_cnt) 
+													{
+														Temper_reply_packet[0]=ERR_CAN1;
+														Temper_reply_packet[1]=command;
+														Temper_reply_packet[2]=1;
+														Temper_reply_packet[3]=type;		
+														Temper_packet_len=4;	
+														break;
+													}
+											}												
+											break;
+											
+										default:
+													Temper_reply_packet[0]=BAD_DATA;
+													Temper_reply_packet[1]=command;
+													Temper_reply_packet[2]=1;
+													Temper_reply_packet[3]=type;		
+													Temper_packet_len=4;												
+											break;
+										
+								}
+								OSMboxPost(M_Temper_reply_len, (void *) &Temper_packet_len);
+						break;		
+					
+					case  CMD_PID_CFG:
+						
+								switch(type)
+								{
+										case TYP_PID_KTM:
+										case TYP_PID_KP:
+										case TYP_PID_KI:
+										case TYP_PID_KD:
+										case TYP_PID_KL:
+													//Temper_cmd_length=7;
+													// sensor 1 including temper only
+													for (i=1;i<8;i++)
+													{
+														TxMessage.Data[i-1]=Temper_CMD_packet[i-1]=can1_cmd_buf[i];  //cmd, len, type, sensor, float temper, uint16 time
+														
+													}	
+													TxMessage.StdId = 0x111;  //	 0xUVZ is U is F$  V=total packet, Z= current #
+													TxMessage.DLC = 7;
+													
+													do
+													{
+														CAN_SendData(CAN1, &TxMessage);															
+														Can1_rcv_len=* (u8 *)OSMboxPend(msg_can_rcv_length,10,&err);	
+														if((Can1_rcv_len)&&(err==OS_ERR_NONE))
+														{
+															if((RxMessage.StdId==0x111) &&  (RxMessage.Data[0]== NO_ERR))
+															{
+																	Flag_CAN1_replied=1;
+																	for(i=0; i<Can1_rcv_len; i++, index_rcv_CAN++)
+																			Temper_reply_packet[i] = RxMessage.Data[i];
+																	error_cnt=0;
+																	break;
+															}
+															error_cnt++;
+														}
+														else error_cnt++;
+													}while((error_cnt<MAX_TRY_ERR) && (Flag_CAN1_replied ==0));	
+													
+													if(error_cnt) 
+													{
+														Temper_reply_packet[0]=ERR_CAN1;
+														Temper_reply_packet[1]=command;
+														Temper_reply_packet[2]=1;
+														Temper_reply_packet[3]=type;		
+														Temper_packet_len=4;															
+													}
+													OSMboxPost(M_Temper_reply_len, (void *) &Temper_packet_len);
+																											
+											break;
+													
+											case TYP_PID_KP_KI:
+											case TYP_PID_KP_KI_KD:
+
+														Temper_reply_packet[0]=NO_ERR;
+														Temper_reply_packet[1]=command;
+														Temper_reply_packet[2]=1;
+														Temper_reply_packet[3]=type;		
+														Temper_packet_len=4;	
+													
+														Flag_CAN1_replied=error_cnt=0;
+														u8temp=Temper_cmd_length-3;
+														u8temp1= u8temp/8;
+														u8temp1= (u8temp%8)? u8temp1+1: u8temp1;
+													 
+														for(j=0;j<u8temp1;j++)
+														{
+															for (i=0;i<8;i++)
+																TxMessage.Data[i]=Temper_CMD_packet[i+j*8]=can1_cmd_buf[i+1+j*8];  //cmd, len, type, sensor, float temper, uint16 time
+															TxMessage.StdId = (0x100 | ((u8temp1 & 0xF)<<4) | (j & 0xf));  //	 0xUVZ is U is F$  V=total packet, Z= current #
+															TxMessage.DLC = 8;
+															
+															do
+																{
+																	CAN_SendData(CAN1, &TxMessage);															
+																	Can1_rcv_len=* (u8 *)OSMboxPend(msg_can_rcv_length,10,&err);	
+																	if((Can1_rcv_len)&&(err==OS_ERR_NONE))
+																	{
+																		if((RxMessage.StdId==TxMessage.StdId) &&  (RxMessage.Data[0]== NO_ERR))
+																		{
+																				if(j==(u8temp1-1))
+																				{
+																						Flag_CAN1_replied=1;
+																						for(i=0; i<Can1_rcv_len; i++, index_rcv_CAN++)
+																								Temper_reply_packet[i] = RxMessage.Data[i];
+																				}
+																				error_cnt=0;
+																				break;
+																		}
+																		error_cnt++;
+																	}
+																	else error_cnt++;
+																}while((error_cnt<MAX_TRY_ERR) && (Flag_CAN1_replied ==0));
+														
+																if(error_cnt) 
+																{
+																	Temper_reply_packet[0]=ERR_CAN1;
+																	Temper_reply_packet[1]=command;
+																	Temper_reply_packet[2]=1;
+																	Temper_reply_packet[3]=type;		
+																	Temper_packet_len=4;	
+																	break;
+																}
+														}												
+											
+												break;
+								}
+					
+						break;
+
+						case  CMD_SET:
+											
+									
+											for (i=1;i<Temper_cmd_length;i++)
+											{
+												TxMessage.Data[i-1]=Temper_CMD_packet[i-1]=can1_cmd_buf[i];  //cmd, len, type, sensor, float temper, uint16 time
+												
+											}	
+											TxMessage.StdId = 0x111;  //	 0xUVZ is U is F$  V=total packet, Z= current #
+											TxMessage.DLC = 7;
+											
+											do
+											{
+												CAN_SendData(CAN1, &TxMessage);															
+												Can1_rcv_len=* (u8 *)OSMboxPend(msg_can_rcv_length,10,&err);	
+												if((Can1_rcv_len)&&(err==OS_ERR_NONE))
+												{
+													if((RxMessage.StdId==0x111) &&  (RxMessage.Data[0]== NO_ERR))
+													{
+															Flag_CAN1_replied=1;
+															for(i=0; i<Can1_rcv_len; i++, index_rcv_CAN++)
+																	Temper_reply_packet[i] = RxMessage.Data[i];
+															error_cnt=0;
+															break;
+													}
+													error_cnt++;
+												}
+												else error_cnt++;
+											}while((error_cnt<MAX_TRY_ERR) && (Flag_CAN1_replied ==0));	
+											
+											if(error_cnt) 
+											{
+												Temper_reply_packet[0]=ERR_CAN1;
+												Temper_reply_packet[1]=command;
+												Temper_reply_packet[2]=1;
+												Temper_reply_packet[3]=type;		
+												Temper_packet_len=4;															
+											}
+											OSMboxPost(M_Temper_reply_len, (void *) &Temper_packet_len);						
+						
+						break;
+								
+							}// switch(command)
+					} // end OSMboxPend(M_can1_cmd_length,10,&err);
+			} // end while (1)
+} // end CAN1_task
+
+
+static void CMD_task(void *p_arg)        // command task
+{
+
+}
+
+
+uint8_t temp=0x01;
+uint32_t count;
+static uint8_t *USBD_HID_GetPos (void)
+{
+  static uint8_t HID_Buffer [HID_INOUT_BYTES];
+  
+
+  count++;
+  temp<<=1;
+  if(temp<=0)
+      temp=0x01;
+  
+  HID_Buffer[0] = temp;
+  HID_Buffer[1] = (count&0xFF);
+  HID_Buffer[2] = ((count>>8)&0xFF);
+  HID_Buffer[3] = ((count>>16)&0xFF);
+  HID_Buffer[4] = ((count>>24)&0xFF);
+  
+  return HID_Buffer;
+}
+
+u8 PacketChkSum(u8 *p, u8 length)    // packet sum check
+{
+	u8 i;  
+	u8 temp=0;
+	for	(i=1;i<(length-2);i++)
+		temp+=*(p+i);
+	if(temp==TAIL)
+		temp++;
+	if(temp==*(p+length-2))
+		return TRUE;
+	else
+		return FALSE;
+	
+}
+
+__ALIGN_BEGIN USB_OTG_CORE_HANDLE  USB_OTG_dev __ALIGN_END;
+
+void USBRes(u8 response, u8 command,u8 * buffer, u8 length)
+{
+	u16 i, u8temp, len;
+	u8 Transi_Buffer[64];
+	
+	Transi_Buffer[0]=HEADER;
+	Transi_Buffer[1]=response;
+	Transi_Buffer[2]=command;
+	Transi_Buffer[3]=length;
+	len=4;
+	for(i=0;i<length;i++,len++)
+			Transi_Buffer[len]=*(buffer+i);
+	u8temp=0;
+	for(i=1;i<(len-1);i++)
+		u8temp+=Transi_Buffer[i];
+	if(u8temp==TAIL)
+		u8temp++;
+   	Transi_Buffer[len]=u8temp;
+	Transi_Buffer[len+1]=Transi_Buffer[len+2]=TAIL;
+	USBD_HID_SendReport (&USB_OTG_dev, Transi_Buffer,HID_INOUT_BYTES);
+}
+
+void USBResFromCAN(u8 * buffer, u8 length)
+{
+	u16 i, u8temp, len;
+	u8 Transi_Buffer[64];
+	
+	Transi_Buffer[0]=HEADER;
+	len=1;
+	for(i=0;i<length;i++,len++)
+			Transi_Buffer[len]=*(buffer+i);
+	u8temp=0;
+	for(i=1;i<(len);i++)
+		u8temp+=Transi_Buffer[i];
+	if(u8temp==TAIL)
+		u8temp++;
+   	Transi_Buffer[len]=u8temp;
+	Transi_Buffer[len+1]=Transi_Buffer[len+2]=TAIL;
+	USBD_HID_SendReport (&USB_OTG_dev, Transi_Buffer,HID_INOUT_BYTES);
+}
+
+static void USB_task(void *p_arg)				// USB thread
+{
+	INT8U err;
+	u8 i,j,u8temp,u8temp1, u8temp2,Command_Len,ResCode,TransLen,u8temp3, ACK_reply;
+	u8 cmd,type,cmd_accepted, SubCmdLenCAN1,SubCmdLenCAN2;  // length to send to CAN_BUS
+	u8 WaitResLenCAN1,WaitResLenCAN2;  // length from sub device expected
+	KL_union KL_temp,KP_temp,KI_temp,KD_temp,TempSet_1_temp,TempSet_2_temp,TempCurr_1_temp,TempCurr_2_temp, UnionTemp;
+  float f32temp1,Fan_Gap_temp;
+	
+	u8 Comand_Buf[64],TxBuffer[64];  // to comply with old version, just simplify code copy only
+				USBD_Init(&USB_OTG_dev,           
+				USB_OTG_FS_CORE_ID,
+				&USR_desc, 
+				&USBD_HID_cb, 
+				&USR_cb);
+	while(1)
+	{
+		//Command_Len=(u8 *)OSMboxPend(M_USB_rsv, 60, &err);
+		Command_Len= *(u8 *)OSMboxPend(M_USB_rsv, 60, &err);
+		if((Command_Len) && (err==OS_ERR_NONE))
+		{
+				ACK_reply=0;
+				if(PacketChkSum(usb_rcv_buf, Command_Len)==TRUE)
+				{
+					for(i=0;i<Command_Len;i++)
+						can1_cmd_buf[i]=Comand_Buf[i]=usb_rcv_buf[i];
+
+					
+////////////////////////////////////////					
+					
+				
+					ResCode=NO_ERR;
+					cmd=Comand_Buf[CMD_BYTE_NUM];
+					TxBuffer[0]=type=Comand_Buf[TYP_BYTE_NUM];
+					cmd_accepted=NONE_ACCEPT;   // 0-- host processing, 1-- CAN1 processing, 2-- CAN2 processing
+				  TransLen=1;
+					
+					switch(Comand_Buf[CMD_BYTE_NUM])
+					{
+					
+						case CMD_GET:
+					
+							break;
+
+						case  CMD_SET:
+												
+										if(Comand_Buf[LEN_BYTE_NUM]<MIN_PACKET_LENGTH)
+														ResCode=ERR_LENGTH;
+										else
+										{
+														switch (Comand_Buf[TYP_BYTE_NUM])
+														{
+																case INTE_TIME:		//0x20						
+																case LED_PRO_TIME:
+																case LED_HOLD_TIME:
+																				SubCmdLenCAN1=8; // remove head	
+																				cmd_accepted=CAN1_ACCEPT;       // CAN1_processing
+																        WaitResLenCAN1=CAN_BUS_ACK_LENTH;
+																		break;
+																
+																case LED_SWITCH:											 
+																case TYP_PCR_TRG_MASK:    // trigger IRQ mask
+																				SubCmdLenCAN1=5; // remove head	
+																				cmd_accepted=CAN1_ACCEPT;       // CAN1_processing		
+																        WaitResLenCAN1=CAN_BUS_ACK_LENTH;
+																	break;
+																
+																case TYP_VER_INFO:   // F/W information is reply in HOST
+																default:  			// invalid type 
+																				ResCode=ERR_TYP;
+																	break;
+														}
+										}
+							break;
+
+
+						case CMD_READ:
+
+										if(Comand_Buf[LEN_BYTE_NUM]<MIN_PACKET_LENGTH)
+														ResCode=ERR_LENGTH;
+										else
+										{
+													switch (Comand_Buf[TYP_BYTE_NUM])
+													{
+															case INTE_TIME:		//0x20
+															case LED_PRO_TIME:
+															case LED_HOLD_TIME:
+																			TransLen=5;
+																			SubCmdLenCAN1=4; // remove head	
+																			cmd_accepted=CAN1_ACCEPT;       // CAN1_processing	
+															        WaitResLenCAN1=CAN_BUS_ACK_LENTH + 4; // data length is 4
+																break;
+															
+															case LED_SWITCH:
+															case TYP_PCR_TRG_MASK:    // trigger IRQ mask
+																			TransLen=2;
+																			SubCmdLenCAN1=4; // remove head	
+																			cmd_accepted=CAN1_ACCEPT;       // CAN1_processing	
+																			WaitResLenCAN1=CAN_BUS_ACK_LENTH + 1; // data length is 1
+															
+															case TYP_VER_INFO:   // get F/W information
+															 
+																			ResCode=NO_ERR;
+																			TransLen=7;
+																			TxBuffer[0]=TYP_VER_INFO;
+																			TxBuffer[1]=FUNC_TEMP_CTRL;		//  temperature control
+																			TxBuffer[2]=VERSION_INFO_MSB;	
+																			TxBuffer[3]=VERSION_INFO_LSB;	
+																			TxBuffer[4]=YEAR_INFO;		//  
+																			TxBuffer[5]=MONTH_INFO;		//  
+																			TxBuffer[6]=DATE_INFO;		//  
+														 
+																break;
+														
+															default:  			// invalid type 
+																			ResCode=ERR_TYP;
+																			TransLen=1;
+																break;
+												 }
+										}
+							break;
+
+						case CMD_MEASURE:
+
+							break;
+  					
+						case CMD_TEMP_SET: // control temperature
+
+										 switch (Comand_Buf[TYP_BYTE_NUM])  // modify @ 140326, add sensor number at byte 1
+										 {
+												case TEMP_SET_ON:	// float	
+
+																u8temp3=Comand_Buf[TYP_BYTE_NUM+1];	 // #sensor 
+																UnionTemp.tempd.byte0 = Comand_Buf[TYP_BYTE_NUM+1+1];
+																UnionTemp.tempd.byte1 = Comand_Buf[TYP_BYTE_NUM+2+1];
+																UnionTemp.tempd.byte2 = Comand_Buf[TYP_BYTE_NUM+3+1];
+																UnionTemp.tempd.byte3 = Comand_Buf[TYP_BYTE_NUM+4+1];
+
+																f32temp1=UnionTemp.float_num;
+																if((f32temp1>0)&& (f32temp1<150))
+																{
+																		u8temp1 = Comand_Buf[TYP_BYTE_NUM+5+1];
+																		u8temp2 = Comand_Buf[TYP_BYTE_NUM+6+1];
+																		switch (u8temp3)
+																		{
+																				case SENSOR_2:
+																				case SENSOR_1:        //SENSOR_PUMP:  // set the pump temperature for cycle control//txc
+																									TransLen=1;
+																									SubCmdLenCAN1=9; // remove head	
+																									cmd_accepted=CAN1_ACCEPT;       // CAN1_processing	
+																									WaitResLenCAN1=CAN_BUS_ACK_LENTH;
+																					break;
+
+																				default:
+																								ResCode=BAD_DATA;
+																					break;
+																		}
+
+																}
+																else
+																		ResCode=BAD_DATA;
+
+
+													break;
+
+												case TEMP_SET_OFF:	 		
+													
+																u8temp3=Comand_Buf[TYP_BYTE_NUM+1];	 // #sensor 
+																switch (u8temp3)
+																{
+																	case SENSOR_1:
+																	case SENSOR_2:
+																							TransLen=1;
+																							SubCmdLenCAN1=5; // remove head	
+																							cmd_accepted=CAN1_ACCEPT;       // CAN1_processing	
+																							WaitResLenCAN1=CAN_BUS_ACK_LENTH;
+																			break;
+																	default:
+																					ResCode=BAD_DATA;
+																		break;
+																}
+														break;
+
+												case TEMP_READ_SENSOR:  
+													
+																u8temp3=Comand_Buf[TYP_BYTE_NUM+1];	 // #sensor 
+										
+																switch (u8temp3)
+																{
+																		case SENSOR_1:
+																		case SENSOR_2:
+																									TransLen=5;
+																									SubCmdLenCAN1=5; // remove head	
+																									cmd_accepted=CAN1_ACCEPT;       // CAN1_processing	
+																									WaitResLenCAN1=CAN_BUS_ACK_LENTH+4;
+																					break;
+																		default:
+																						ResCode=BAD_DATA;
+																			break;
+																}									
+														break;
+
+												case TYP_FAN_CTRL:   // fan control, feature @0512, output on PC5
+												case TYP_FAN_READ:
+																				TransLen=2;
+																				SubCmdLenCAN1=4; // remove head	
+																				cmd_accepted=CAN1_ACCEPT;       // CAN1_processing	
+																				WaitResLenCAN1=CAN_BUS_ACK_LENTH+1;
+														break;
+										
+												case TYP_FAN_GAP_SET:
+													
+																		UnionTemp.tempd.byte0= Comand_Buf[TYP_BYTE_NUM+1];
+																		UnionTemp.tempd.byte1= Comand_Buf[TYP_BYTE_NUM+2];
+																		UnionTemp.tempd.byte2= Comand_Buf[TYP_BYTE_NUM+3];
+																		UnionTemp.tempd.byte3= Comand_Buf[TYP_BYTE_NUM+4];		
+
+
+																		if((UnionTemp.float_num>=0)&&(UnionTemp.float_num<TEMP_GAP_SWAP))
+																		{
+																				TransLen=1;
+																				SubCmdLenCAN1=8; // remove head	
+																				cmd_accepted=CAN1_ACCEPT;       // CAN1_processing	
+																				WaitResLenCAN1=CAN_BUS_ACK_LENTH;
+																		}
+																		else
+																				ResCode=OUT_RANGE;
+
+														break;
+										 
+												case TYP_FAN_GAP_READ:
+																				TransLen=5;
+																				SubCmdLenCAN1=4; // remove head	
+																				cmd_accepted=CAN1_ACCEPT;       // CAN1_processing	
+																				WaitResLenCAN1=CAN_BUS_ACK_LENTH+4;
+													break;
+
+											
+												default:
+															ResCode=ERR_TYP;
+													break;
+											}
+
+							break;					
+
+						case  CMD_PID_CFG: // modify @2014-12-03
+									   // Comand_Buf[TYP_BYTE_NUM]	will insert segment index at bit7..bit4
+									   // bit3..bit0 still be type
+					
+										u8temp3= (Comand_Buf[TYP_BYTE_NUM]>>4);
+										if (u8temp3>=PID_SLOP_SEG_MAX)
+													ResCode=OUT_RANGE;	
+										else
+										{
+												u8temp2=(Comand_Buf[TYP_BYTE_NUM] & 0xf);
+												u8temp1=Comand_Buf[LEN_BYTE_NUM];
+											
+												switch(u8temp2)
+												{
+														case TYP_PID_KTM:
+																		if(u8temp3 !=0)
+																				ResCode=OUT_RANGE; // just only support one point now.
+																		else
+																		{
+																				if(u8temp1 < 4)
+																						ResCode=ERR_LENGTH;
+																				else
+																				{
+																						TransLen=1;
+																						SubCmdLenCAN1=8; // remove head	
+																						cmd_accepted=CAN1_ACCEPT;       // CAN1_processing	
+																						WaitResLenCAN1=CAN_BUS_ACK_LENTH;
+																				}
+
+																		}
+															break;
+
+														case TYP_PID_KP:
+														case TYP_PID_KI:
+														case TYP_PID_KD:
+														case TYP_PID_KL:													
+																			if(u8temp1 < 4)
+																						ResCode=ERR_LENGTH;
+
+																			else
+																				{
+																						TransLen=1;
+																						SubCmdLenCAN1=8; // remove head	
+																						cmd_accepted=CAN1_ACCEPT;       // CAN1_processing	
+																						WaitResLenCAN1=CAN_BUS_ACK_LENTH;
+																				}
+
+																break;
+					
+					
+														case TYP_PID_KP_KI:
+															
+																		if(u8temp1 < 8)
+																				ResCode=ERR_LENGTH;
+
+																		else
+																		{
+																				TransLen=1;
+																				SubCmdLenCAN1=12; // remove head	
+																				cmd_accepted=CAN1_ACCEPT;       // CAN1_processing	
+																				WaitResLenCAN1=CAN_BUS_ACK_LENTH;
+																		}
+
+																break;
+					
+					
+														case TYP_PID_KP_KI_KD:
+															
+																			if(u8temp1 < 12)
+																						ResCode=ERR_LENGTH;
+
+																			else
+																			{
+																					TransLen=1;
+																					SubCmdLenCAN1=16; // remove head	
+																					cmd_accepted=CAN1_ACCEPT;       // CAN1_processing	
+																					WaitResLenCAN1=CAN_BUS_ACK_LENTH;
+																			}
+
+																break;
+					
+
+
+														default:
+																		ResCode=ERR_TYP;
+															break;
+												}
+										}
+							break; 
+					
+						case  CMD_PID_READ:
+																			
+											TransLen=38;
+											SubCmdLenCAN1=4; // remove head	
+											cmd_accepted=CAN1_ACCEPT;       // CAN1_processing	
+											WaitResLenCAN1=CAN_BUS_ACK_LENTH+37;
+									
+							break;
+							   
+						case CMD_CYCLE_CTRL:
+						
+									u8temp2=Comand_Buf[TYP_BYTE_NUM];
+									u8temp1=Comand_Buf[LEN_BYTE_NUM];
+						
+									switch(u8temp2)
+									{
+											case TYP_CYCLE_LOAD:
+									
+															if((Comand_Buf[SECT_BYTE]<1) || (Comand_Buf[STAGE_BYTE]<1))
+																	ResCode=OUT_RANGE;
+															else
+															{
+																	u8temp=Comand_Buf[STAGE_BYTE];
+																	Buffer_Cycle_Control.TotalStage= u8temp-1;
+																
+																	for(i=0;i<u8temp;i++)	
+																	{
+																				u8temp1=i*BYTE_PER_STAGE;
+																				Buffer_Cycle_SetPoint[i].SetPoint.tempd.byte0=Comand_Buf[SET_START_BYTE+u8temp1];
+																				Buffer_Cycle_SetPoint[i].SetPoint.tempd.byte1=Comand_Buf[SET_START_BYTE+u8temp1+1];
+																				Buffer_Cycle_SetPoint[i].SetPoint.tempd.byte2=Comand_Buf[SET_START_BYTE+u8temp1+2];
+																				Buffer_Cycle_SetPoint[i].SetPoint.tempd.byte3=Comand_Buf[SET_START_BYTE+u8temp1+3];
+												
+																				Buffer_Cycle_SetPoint[i].SetTime_Union.tempw.byte1=Comand_Buf[SET_START_BYTE+u8temp1+4];
+																				Buffer_Cycle_SetPoint[i].SetTime_Union.tempw.byte0=Comand_Buf[SET_START_BYTE+u8temp1+5];
+												
+																	}
+																	if(SetPoint_Check(u8temp,Buffer_Cycle_SetPoint)!= VALID)
+																				ResCode=OUT_RANGE;	
+																	else		
+																	{
+																				TransLen=1;
+																				SubCmdLenCAN1=4+(u8temp*BYTE_PER_STAGE)+ 3; // remove head	
+																				cmd_accepted=CAN1_ACCEPT;       // CAN1_processing	
+																				WaitResLenCAN1=CAN_BUS_ACK_LENTH;																			
+																	}
+															}
+													
+												break;
+
+
+											case TYP_PE_LOAD: // pump, ext, start inforamtion
+
+														ResCode=NO_ERR;
+														for(i=0;i<2;i++)
+														{
+																	u8temp1=i*BYTE_PER_STAGE;  
+																	Buffer_Cycle_SetPoint[i].SetPoint.tempd.byte0=Comand_Buf[SET_START_BYTE+u8temp1];
+																	Buffer_Cycle_SetPoint[i].SetPoint.tempd.byte1=Comand_Buf[SET_START_BYTE+u8temp1+1];
+																	Buffer_Cycle_SetPoint[i].SetPoint.tempd.byte2=Comand_Buf[SET_START_BYTE+u8temp1+2];
+																	Buffer_Cycle_SetPoint[i].SetPoint.tempd.byte3=Comand_Buf[SET_START_BYTE+u8temp1+3];
+									
+																	Buffer_Cycle_SetPoint[i].SetTime_Union.tempw.byte1=Comand_Buf[SET_START_BYTE+u8temp1+4];
+																	Buffer_Cycle_SetPoint[i].SetTime_Union.tempw.byte0=Comand_Buf[SET_START_BYTE+u8temp1+5];
+														}
+
+														if(SetPoint_Check(2,Buffer_Cycle_SetPoint)!= VALID)
+																ResCode=OUT_RANGE;	
+
+														else
+														{
+																	TransLen=1;
+																	SubCmdLenCAN1=4+(2*BYTE_PER_STAGE)+ 3; // remove head	
+																	cmd_accepted=CAN1_ACCEPT;       // CAN1_processing	
+																	WaitResLenCAN1=CAN_BUS_ACK_LENTH;																			
+														}
+															
+													break;
+												 
+												
+												case TYP_OVERSHOT_TIM:
+													
+															ResCode=NO_ERR;
+															UnionTemp.tempd.byte0= Comand_Buf[TYP_BYTE_NUM+1];
+															UnionTemp.tempd.byte1= Comand_Buf[TYP_BYTE_NUM+2];
+															UnionTemp.tempd.byte2= Comand_Buf[TYP_BYTE_NUM+3];
+															UnionTemp.tempd.byte3= Comand_Buf[TYP_BYTE_NUM+4];	
+													
+															if(UnionTemp.float_num>=0)
+															{
+																		TransLen=1;
+																		SubCmdLenCAN1=8; // remove head	
+																		cmd_accepted=CAN1_ACCEPT;       // CAN1_processing	
+																		WaitResLenCAN1=CAN_BUS_ACK_LENTH;																			
+															}
+															else
+																	ResCode=OUT_RANGE;
+
+													break;
+													
+												case TYP_OVERSHOT_TEM:
+													
+															ResCode=NO_ERR;
+															UnionTemp.tempd.byte0= Comand_Buf[TYP_BYTE_NUM+1];
+															UnionTemp.tempd.byte1= Comand_Buf[TYP_BYTE_NUM+2];
+															UnionTemp.tempd.byte2= Comand_Buf[TYP_BYTE_NUM+3];
+															UnionTemp.tempd.byte3= Comand_Buf[TYP_BYTE_NUM+4];	
+													
+															if((UnionTemp.float_num>=0)&&(UnionTemp.float_num<TEMP_GAP_SWAP))
+															{
+																		TransLen=1;
+																		SubCmdLenCAN1=8; // remove head	
+																		cmd_accepted=CAN1_ACCEPT;       // CAN1_processing	
+																		WaitResLenCAN1=CAN_BUS_ACK_LENTH;																			
+															}
+															else
+																	ResCode=OUT_RANGE;
+							
+										
+													break;
+												
+											case TYP_PWM_LIMIT:
+														
+													break;
+														
+											default:
+															ResCode=ERR_TYP;	
+												break;
+									}	
+						 
+						break;
+
+					/////////////////////////////////////////
+				   	case CMD_CYCLE_CTRL_READ:   // add @ 2014-11-30, read out cycle number
+
+									ResCode=NO_ERR;
+									TxBuffer[0]=u8temp2=Comand_Buf[TYP_BYTE_NUM];										
+									TransLen=1;
+						
+									switch(u8temp2)
+									{
+											case TYP_CYCLE_READ:
+												
+																TransLen=3;
+																SubCmdLenCAN1=4; // remove head	
+																cmd_accepted=CAN1_ACCEPT;       // CAN1_processing	
+																WaitResLenCAN1=CAN_BUS_ACK_LENTH+2;															
+													break;
+											
+											case TYP_PWM_READ:
+												
+																TransLen=7;
+																SubCmdLenCAN1=4; // remove head	
+																cmd_accepted=CAN1_ACCEPT;       // CAN1_processing	
+																WaitResLenCAN1=CAN_BUS_ACK_LENTH+6;															
+													break;
+											
+											case TYP_OVERSHOT_TIM:		
+											case TYP_OVERSHOT_TEM:
+												
+																TransLen=5;
+																SubCmdLenCAN1=4; // remove head	
+																cmd_accepted=CAN1_ACCEPT;       // CAN1_processing	
+																WaitResLenCAN1=CAN_BUS_ACK_LENTH+4;	
+													break;
+											
+											case CYCLE_STATE_POLL:
+													
+																TransLen=2;
+																SubCmdLenCAN1=4; // remove head	
+																cmd_accepted=CAN1_ACCEPT;       // CAN1_processing	
+																WaitResLenCAN1=CAN_BUS_ACK_LENTH+1;																			
+													
+												break;
+											
+											case TYP_PWM_LIMIT:
+														
+													break;
+													
+											default:
+															ResCode=ERR_TYP;
+												break;
+									}
+							break;
+
+#ifdef __USE_USB_BUS
+#ifdef __USE_RAM_DEBUG
+ 
+					case CMD_DEBUG:
+						
+							ResCode=NO_ERR;
+							TxBuffer[0]=u8temp2=Comand_Buf[TYP_BYTE_NUM];
+					
+							switch(u8temp2)
+							{
+								case TYP_RAM_DUMP:  // dump the RAM
+
+												if(RamDumpFlag==2)
+												{
+														u8temp= DUMPSIZE/SIZE_PER_PACKET;
+														u8temp=(DUMPSIZE%SIZE_PER_PACKET)? (u8temp+1):u8temp;
+														TransLen=SIZE_PER_PACKET;
+														TxBuffer[0]=TYP_RAM_DUMP;
+														TxBuffer[1]=RAM_Dump_index/SIZE_PER_PACKET;
+														TxBuffer[1]=(RAM_Dump_index%SIZE_PER_PACKET)? (TxBuffer[1]+1):TxBuffer[1];
+												
+														u16temp=0;
+														for(i=0;i<u8temp;i++)
+														{
+																TxBuffer[2]=i+1;
+																for(j=0;j<SIZE_PER_PACKET;j++)
+																		TxBuffer[j+3]=RamDumpBlock[u16temp++];
+
+																USBRes(ResCode, CMD_DEBUG, TxBuffer, TransLen+3);
+																delay_ms(32);
+														}
+														RamDumpFlag=TickDump=0;  // unlock ram to dump again;
+														TRG_OUT=0;
+												}
+												else
+												{
+														ResCode=BAD_DATA;
+													  TransLen=1;
+													  USBRes(ResCode, CMD_DEBUG, TxBuffer, TransLen);
+												}
+									break;					
+								default:
+									break;
+							}
+						break;
+#endif
+#endif							
+					default:
+								ResCode=ERR_CMD;
+						break;
+				
+				}
+					
+					if(cmd_accepted == NONE_ACCEPT)
+					{
+							USBRes(ResCode, cmd, TxBuffer, TransLen);
+					}
+					else
+					{
+							if(cmd_accepted & CAN1_ACCEPT)
+							{
+										for(i=0;i<SubCmdLenCAN1;i++)
+													can1_cmd_buf[i]=Comand_Buf[i];
+										OSMboxPost(M_can1_cmd_length, &SubCmdLenCAN1);
+								    OSTimeDly(10);
+										TransLen=*(u8 *)OSMboxPend(M_Temper_reply_len, 30, &err);											
+										u8temp3=0;	
+							}
+							
+							if(cmd_accepted & CAN2_ACCEPT)
+							{
+							
+							}
+					}
+			}		
+				
+					
+					
+					
+					
+					
+					
+					
+////////////////////////////////////////					
+					
+					
+					switch(Comand_Buf[CMD_BYTE_NUM])  
+					{
+							case  CMD_TEMP_SET:	
+								
+								switch (Comand_Buf[TYP_BYTE_NUM])
+								{
+									case TEMP_READ_SENSOR:	
+										/*										
+										ResCode=NO_ERR;
+										u8temp3=Comand_Buf[TYP_BYTE_NUM+1];	 // #sensor 
+										TransLen=5;
+										switch (u8temp3)
+										{
+											case SENSOR_1:
+											case SENSOR_2:
+												u8temp3=5;  // only send valid data on CAN, remove tail, checksum
+											  for(i=0;i<u8temp3;i++)  
+													can1_cmd_buf[i]=Comand_Buf[i];
+												OSMboxPost(M_can1_cmd_length, &u8temp3);	
+											  OSTimeDly(10);
+												TransLen=*(u8 *)OSMboxPend(M_Temper_reply_len, 30, &err);
+											
+											u8temp3=0;
+											do{
+												if((TransLen)&&(err==OS_ERR_NONE))
+												{
+													USBResFromCAN(Temper_reply_packet,TransLen);
+													u8temp3=0;
+													ACK_reply=1;
+													break;
+												}
+												else
+													u8temp3++;
+											}while(u8temp3< MAX_TRY_ERR);
+											
+											if(u8temp3)
+											{
+													ResCode=ERR_CAN1;
+													TxBuffer[0]= TEMP_READ_SENSOR;
+													TransLen=1;
+											}
+												break;
+											
+											default:
+													ResCode=BAD_DATA;
+													TxBuffer[0]= TEMP_READ_SENSOR;
+													TransLen=1;
+												break;
+										}
+										break;
+									*/
+									case TEMP_SET_ON:   		// valid 7 byte -- sensor#, temperature 4 byte, time 2 byte
+									case TEMP_SET_OFF:  		// valid 1 byte -- sensor #
+									case TYP_FAN_CTRL:  		// valid 1 byte -- fan control
+									case TYP_FAN_GAP_SET:		// valid 4 byte -- float gap
+									case TYP_FAN_READ:			// valid 0 byte -- just read 1 byte
+									case TYP_FAN_GAP_READ: 	// valid 0 byte -- just read 4 byte
+											//switch (Comand_Buf[TYP_BYTE_NUM+1])
+											{
+												//case SENSOR_1:
+												//case SENSOR_2:
+														if (Comand_Buf[TYP_BYTE_NUM]==TEMP_SET_ON) 
+																TransLen=11;  // only send valid data on CAN, remove tail, checksum
+														else if ((Comand_Buf[TYP_BYTE_NUM]==TEMP_SET_OFF) || (Comand_Buf[TYP_BYTE_NUM]==TYP_FAN_CTRL))
+																		TransLen=5;   // head, cmd,length, type, sensor or fan_control
+																	else if (Comand_Buf[TYP_BYTE_NUM]==TYP_FAN_GAP_SET) // head, cmd, len,typ, 4 byte gap
+																			TransLen=8; 
+																				else if((Comand_Buf[TYP_BYTE_NUM]==TYP_FAN_READ) || (Comand_Buf[TYP_BYTE_NUM]==TYP_FAN_GAP_READ))
+																								TransLen=4;
+																							else if (Comand_Buf[TYP_BYTE_NUM]==TEMP_READ_SENSOR)
+																											TransLen=5;
+												
+														for(i=0;i<TransLen;i++)
+																can1_cmd_buf[i]=Comand_Buf[i];
+														OSMboxPost(M_can1_cmd_length, &TransLen);
+														OSTimeDly(10);
+														TransLen=*(u8 *)OSMboxPend(M_Temper_reply_len, 30, &err);											
+														u8temp3=0;		
+
+														do
+														{
+															if((TransLen)&&(err==OS_ERR_NONE))
+															{
+																USBResFromCAN(Temper_reply_packet,TransLen);
+																u8temp3=0;
+																ACK_reply=1;
+																break;
+															}
+															else
+																u8temp3++;
+														}while(u8temp3< MAX_TRY_ERR);
+														
+														if(u8temp3)
+														{
+																ResCode=ERR_CAN1;
+																TxBuffer[0]= TEMP_READ_SENSOR;
+																TransLen=1;
+														}
+												//break;
+/*
+												default:
+														ResCode=BAD_DATA;
+														TxBuffer[0]= TEMP_READ_SENSOR;
+														TransLen=1;
+												break;
+*/
+											}
+										break;
+									
+									default:
+											ResCode=ERR_TYP;
+											TxBuffer[0]= Comand_Buf[TYP_BYTE_NUM];
+											TransLen=1;
+										break;
+									
+								}  // CMD_TEMP_SET   -- type
+								
+								if(!ACK_reply)USBRes(ResCode, CMD_TEMP_SET, TxBuffer, TransLen);
+								break;
+								
+							case CMD_CYCLE_CTRL:
+								
+										ACK_reply=0;
+										switch (Comand_Buf[TYP_BYTE_NUM])
+										{
+												case TYP_CYCLE_LOAD:
+												case TYP_PE_LOAD: 
+												case TYP_OVERSHOT_TIM:
+												case TYP_OVERSHOT_TEM:
+													
+															TransLen=Command_Len-3;
+															for(i=0;i<TransLen;i++)
+																	can1_cmd_buf[i]=Comand_Buf[i];
+															OSMboxPost(M_can1_cmd_length, &TransLen);
+															OSTimeDly(10);
+															TransLen=*(u8 *)OSMboxPend(M_Temper_reply_len, 30, &err);		
+															u8temp3=0;
+															do
+															{
+																if((TransLen)&&(err==OS_ERR_NONE))
+																{
+																	USBResFromCAN(Temper_reply_packet,TransLen);
+																	u8temp3=0;
+																	ACK_reply=1;
+																	break;
+																}
+																else
+																	u8temp3++;
+															}while(u8temp3< MAX_TRY_ERR);
+															
+															if(u8temp3)
+															{
+																	ResCode=ERR_CAN1;
+																	TxBuffer[0]= CMD_CYCLE_CTRL;
+																	TransLen=1;
+															}
+												break;
+													
+											default:
+													ResCode=ERR_TYP;
+													TxBuffer[0]= Comand_Buf[TYP_BYTE_NUM];
+													TransLen=1;
+												break;
+										}
+										
+										if(!ACK_reply)USBRes(ResCode, CMD_TEMP_SET, TxBuffer, TransLen);
+								break;
+										
+							case  CMD_PID_CFG:
+											switch (Comand_Buf[TYP_BYTE_NUM])
+											{
+													case TYP_PID_KTM:
+													case TYP_PID_KP:
+													case TYP_PID_KI:
+													case TYP_PID_KD:
+													case TYP_PID_KP_KI:
+													case TYP_PID_KP_KI_KD:
+													case TYP_PID_KL:
+																if((Comand_Buf[TYP_BYTE_NUM]==TYP_PID_KTM) || (Comand_Buf[TYP_BYTE_NUM]==TYP_PID_KP)||(Comand_Buf[TYP_BYTE_NUM]==TYP_PID_KI)||(Comand_Buf[TYP_BYTE_NUM]==TYP_PID_KD)||(Comand_Buf[TYP_BYTE_NUM]==TYP_PID_KL))
+																		TransLen=8;  // head, cmd.len.typ.4byte data
+																else if(Comand_Buf[TYP_BYTE_NUM]==TYP_PID_KP_KI)
+																				TransLen=12;
+																			else	
+																					TransLen=16;
+																			
+																for(i=0;i<TransLen;i++)
+																	can1_cmd_buf[i]=Comand_Buf[i];
+																OSMboxPost(M_can1_cmd_length, &TransLen);
+																OSTimeDly(10);
+																TransLen=*(u8 *)OSMboxPend(M_Temper_reply_len, 30, &err);													
+																u8temp3=0;		
+																do
+																{
+																	if((TransLen)&&(err==OS_ERR_NONE))
+																	{
+																		USBResFromCAN(Temper_reply_packet,TransLen);
+																		u8temp3=0;
+																		ACK_reply=1;
+																		break;
+																	}
+																	else
+																		u8temp3++;
+																}while(u8temp3< MAX_TRY_ERR);
+																
+																if(u8temp3)
+																{
+																		ResCode=ERR_CAN1;
+																		TxBuffer[0]= TEMP_READ_SENSOR;
+																		TransLen=1;
+																}												
+														break;
+													
+													default:
+															ResCode=ERR_TYP;
+															TxBuffer[0]= Comand_Buf[TYP_BYTE_NUM];
+															TransLen=1;													
+														break;	
+											}
+											if(!ACK_reply)USBRes(ResCode, CMD_TEMP_SET, TxBuffer, TransLen);
+								break;	
+							
+							case  CMD_SET:
+											switch (Comand_Buf[TYP_BYTE_NUM])
+											{
+														case INTE_TIME:
+														case LED_PRO_TIME:
+														case LED_HOLD_TIME:
+															
+														case LED_SWITCH:
+														case TYP_PCR_TRG_MASK:
+															
+																if((Comand_Buf[TYP_BYTE_NUM]==INTE_TIME) || (Comand_Buf[TYP_BYTE_NUM]==LED_PRO_TIME)||(Comand_Buf[TYP_BYTE_NUM]==LED_HOLD_TIME))
+																		TransLen=8;  // head, cmd.len.typ.4byte data
+																else 	
+																		TransLen=5;	 // 1	byte data												
+														
+																for(i=0;i<TransLen;i++)
+																	can1_cmd_buf[i]=Comand_Buf[i];
+																OSMboxPost(M_can1_cmd_length, &TransLen);
+																OSTimeDly(10);
+																TransLen=*(u8 *)OSMboxPend(M_Temper_reply_len, 30, &err);													
+																u8temp3=0;		
+																do
+																{
+																	if((TransLen)&&(err==OS_ERR_NONE))
+																	{
+																		USBResFromCAN(Temper_reply_packet,TransLen);
+																		u8temp3=0;
+																		ACK_reply=1;
+																		break;
+																	}
+																	else
+																		u8temp3++;
+																}while(u8temp3< MAX_TRY_ERR);
+																
+																if(u8temp3)
+																{
+																		ResCode=ERR_CAN1;
+																		TxBuffer[0]= TEMP_READ_SENSOR;
+																		TransLen=1;
+																}																									
+															break;
+														
+													default:
+															ResCode=ERR_TYP;
+															TxBuffer[0]= Comand_Buf[TYP_BYTE_NUM];
+															TransLen=1;													
+														break;
+											}
+											if(!ACK_reply)USBRes(ResCode, CMD_TEMP_SET, TxBuffer, TransLen);
+								break;
+							
+							case CMD_READ:
+											switch (Comand_Buf[TYP_BYTE_NUM])
+											{
+														case INTE_TIME:
+														case LED_PRO_TIME:
+														case LED_HOLD_TIME:
+														case LED_SWITCH:
+														case TYP_PCR_TRG_MASK:	
+															
+																TransLen=4;
+																for(i=0;i<TransLen;i++)
+																	can1_cmd_buf[i]=Comand_Buf[i];
+																OSMboxPost(M_can1_cmd_length, &TransLen);
+																OSTimeDly(10);
+																TransLen=*(u8 *)OSMboxPend(M_Temper_reply_len, 30, &err);
+														
+																u8temp3=0;		
+																do
+																{
+																	if((TransLen)&&(err==OS_ERR_NONE))
+																	{
+																		USBResFromCAN(Temper_reply_packet,TransLen);
+																		u8temp3=0;
+																		ACK_reply=1;
+																		break;
+																	}
+																	else
+																		u8temp3++;
+																}while(u8temp3< MAX_TRY_ERR);
+																
+																if(u8temp3)
+																{
+																		ResCode=ERR_CAN1;
+																		TxBuffer[0]= TEMP_READ_SENSOR;
+																		TransLen=1;
+																}	
+																break;
+														
+														case TYP_VER_INFO:
+															
+																break;
+														
+														default:
+															ResCode=ERR_TYP;
+															TxBuffer[0]= Comand_Buf[TYP_BYTE_NUM];
+															TransLen=1;													
+														break;
+											}
+											if(!ACK_reply)USBRes(ResCode, CMD_TEMP_SET, TxBuffer, TransLen);
+								break;
+							
+							case CMD_PID_READ:
+											TransLen=2;  // only need to send head , cmd
+											for(i=0;i<TransLen;i++)
+												can1_cmd_buf[i]=Comand_Buf[i];
+											OSMboxPost(M_can1_cmd_length, &TransLen);
+											OSTimeDly(10);
+											TransLen=*(u8 *)OSMboxPend(M_Temper_reply_len, 30, &err);
+									
+											u8temp3=0;		
+											do
+											{
+												if((TransLen)&&(err==OS_ERR_NONE))
+												{
+													USBResFromCAN(Temper_reply_packet,TransLen);
+													u8temp3=0;
+													ACK_reply=1;
+													break;
+												}
+												else
+													u8temp3++;
+											}while(u8temp3< MAX_TRY_ERR);
+											
+											if(u8temp3)
+											{
+													ResCode=ERR_CAN1;
+													TxBuffer[0]= TEMP_READ_SENSOR;
+													TransLen=1;
+											}		
+								break;
+							
+							default:
+
+								break;
+					}
+				}
+		}
+//	USBD_HID_SendReport (&USB_OTG_dev, buf,HID_INOUT_BYTES);
+
+		
+	};
+}
+
+static void startup_task(void *p_arg) 
+{ 
+  systick_init();     /* Initialize the SysTick. */
+	Right_time=OSQCreate((void*)&RightQueueTbl[0],20);		                 //建立消息队列
+	msg_can_rcv_length=OSMboxCreate((void*)0);
+	//Sem_CAN1_AVL=OSSemCreate(3);   // creat Semphore for CAN_1 (temp control bus)
+	M_Temper_reply_len=OSMboxCreate((void*)0);
+	M_can1_wait_length=OSMboxCreate((void*)0);
+	M_can1_cmd_length=OSMboxCreate((void*)0);
+	M_USB_rsv=OSMboxCreate((void*)0);
+	
+	/*创建新任务*/
+	OSTaskCreate(led1_task, 0, &led1_task_stk[LED1_TASK_STK_SIZE - 1], LED1_TASK_PRIO); 
+	OSTaskCreate(CAN1_task, 0, &CAN1_task_stk[CAN1_TASK_STK_SIZE - 1], CAN1_TASK_PRIO);
+	//OSTaskCreate(CMD_task, 	0, &CMD_task_stk [CMD_TASK_STK_SIZE - 1], CMD_TASK_PRIO);
+	OSTaskCreate(USB_task, 	0, &USB_task_stk [USB_TASK_STK_SIZE - 1], USB_TASK_PRIO);
+	while(1) 
+	{
+		/*LED2以1s频率闪烁*/
+	 	led_on(LED2);
+	 	OSTimeDlyHMSM(0,0,0,5);   //500ms延时，释放CPU控制权
+	 	led_off(LED2);
+	 	OSTimeDlyHMSM(0,0,0, 5);   //500ms延时，释放CPU控制权
+	}        
+}
+
+
+int main(void) 
+{ 
+    BSP_Init();
+
+	OSInit(); 
+	// g_TxMbox=OSMboxCreate((void*)0); //创建全局信号-消息邮箱
+    OSTaskCreate(startup_task, (void *)0, 
+          &startup_task_stk[STARTUP_TASK_STK_SIZE - 1], 
+          STARTUP_TASK_PRIO); 
+     OSStart(); 
+     return 0; 
+}
+

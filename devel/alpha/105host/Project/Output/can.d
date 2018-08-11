@@ -1,0 +1,15 @@
+.\Output\can.o: ..\App\can.c
+.\Output\can.o: ..\App\can.h
+.\Output\can.o: ..\Libraries\CM3\stm32f10x.h
+.\Output\can.o: ..\Libraries\CM3\core_cm3.h
+.\Output\can.o: C:\Keil\ARM\RV31\INC\stdint.h
+.\Output\can.o: ..\Libraries\CM3\system_stm32f10x.h
+.\Output\can.o: ..\App\stm32f10x_conf.h
+.\Output\can.o: ..\Libraries\STM32F10x_StdPeriph_Driver\inc\stm32f10x_can.h
+.\Output\can.o: ..\Libraries\CM3\stm32f10x.h
+.\Output\can.o: ..\Libraries\STM32F10x_StdPeriph_Driver\inc\stm32f10x_exti.h
+.\Output\can.o: ..\Libraries\STM32F10x_StdPeriph_Driver\inc\stm32f10x_gpio.h
+.\Output\can.o: ..\Libraries\STM32F10x_StdPeriph_Driver\inc\stm32f10x_rcc.h
+.\Output\can.o: ..\Libraries\STM32F10x_StdPeriph_Driver\inc\stm32f10x_tim.h
+.\Output\can.o: ..\Libraries\STM32F10x_StdPeriph_Driver\inc\stm32f10x_usart.h
+.\Output\can.o: ..\Libraries\STM32F10x_StdPeriph_Driver\inc\misc.h

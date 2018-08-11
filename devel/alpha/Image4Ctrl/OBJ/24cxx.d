@@ -1,0 +1,10 @@
+..\obj\24cxx.o: ..\HARDWARE\24CXX\24cxx.c
+..\obj\24cxx.o: ..\HARDWARE\24CXX\24cxx.h
+..\obj\24cxx.o: ..\HARDWARE\24CXX\myiic.h
+..\obj\24cxx.o: ..\SYSTEM\sys\sys.h
+..\obj\24cxx.o: ..\SYSTEM\sys\stm32f10x_map.h
+..\obj\24cxx.o: ..\SYSTEM\sys\stm32f10x_conf.h
+..\obj\24cxx.o: ..\SYSTEM\sys\stm32f10x_type.h
+..\obj\24cxx.o: ..\SYSTEM\sys\cortexm3_macro.h
+..\obj\24cxx.o: ..\SYSTEM\sys\stm32f10x_nvic.h
+..\obj\24cxx.o: ..\SYSTEM\delay\delay.h

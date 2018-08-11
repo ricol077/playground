@@ -1,0 +1,13 @@
+..\obj\temperature.o: Temperature.c
+..\obj\temperature.o: ..\SYSTEM\sys\sys.h
+..\obj\temperature.o: ..\SYSTEM\sys\stm32f10x_map.h
+..\obj\temperature.o: ..\SYSTEM\sys\stm32f10x_conf.h
+..\obj\temperature.o: ..\SYSTEM\sys\stm32f10x_type.h
+..\obj\temperature.o: ..\SYSTEM\sys\cortexm3_macro.h
+..\obj\temperature.o: ..\SYSTEM\sys\stm32f10x_nvic.h
+..\obj\temperature.o: user_def.h
+..\obj\temperature.o: temperature.h
+..\obj\temperature.o: ..\HARDWARE\24CXX\myiic.h
+..\obj\temperature.o: ..\HARDWARE\LED\led.h
+..\obj\temperature.o: ..\HARDWARE\TIMER\timer.h
+..\obj\temperature.o: PCR_Cycle.h
